@@ -19,7 +19,7 @@ clean:
 
 package: clean
 	# install dependencies into package directory
-	python3 -m pip install -r requirements.txt -t package
+	python -m pip install -r requirements.txt -t package
 	# copy in the .py source file(s)
 	cp *.py package/
 	# zip up the entire directory into package.zip
@@ -30,8 +30,8 @@ package: clean
 # run pip-compile to re-generate the requirements.txt file
 compile:
 	# compile the set of requirements from requirements.in to requirements.txt
-	# must set locale, see http://click.pocoo.org/5/python3/ for details
-	python3 -m pip install -U pip pip-tools
+	# must set locale, see http://click.pocoo.org/5/python/ for details
+	python -m pip install -U pip pip-tools
 	pip-compile --output-file requirements.txt requirements.in
 
 upload:

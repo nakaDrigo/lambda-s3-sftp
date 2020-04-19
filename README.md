@@ -50,7 +50,7 @@ You should now have a docker image called `lambda-packager` which can be used to
 
 ```shell
 # package command builds the package.zip file ready for upload to AWS
-$ docker run --rm --volume $(pwd):/lambda lambda-packager package
+$ docker run --rm --volume $(pwd -W):/lambda lambda-packager package
 ```
 
 This command will mount the current directory (`$(pwd)`) into a new container as `/lambda`, so that the container has access to `requirements.txt` and the function file (`s3_to_sftp.py`), and run the `make package` command.
