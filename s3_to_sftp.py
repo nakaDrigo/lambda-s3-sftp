@@ -45,7 +45,7 @@ assert SSH_PASSWORD or SSH_PRIVATE_KEY, "Missing SSH_PASSWORD or SSH_PRIVATE_KEY
 SSH_PORT = int(os.getenv('SSH_PORT', 22))
 SSH_DIR = os.getenv('SSH_DIR')
 # filename mask used for the remote file
-SSH_FILENAME = os.getenv('SSH_FILENAME', 'data_{current_date}')
+#SSH_FILENAME = os.getenv('SSH_FILENAME', 'data_{current_date}')
 
 
 def on_trigger_event(event, context):
@@ -96,10 +96,11 @@ def on_trigger_event(event, context):
 
     with transport:
         for s3_file in s3_files(event):
-            filename = sftp_filename(SSH_FILENAME, s3_file)
-            bucket = s3_file.bucket_name
-            contents = ''
             try:
+                filename = sftp_filename(s3_file.key, s3_file)
+                bucket = s3_file.bucket_name
+                contents = ''
+                logger.debug("[S3-SFTP] transport: filename{"+filename+"} bucket{"+bucket+"} contents{"+contents+"}")
                 logger.info("[S3-SFTP] Transferring S3 file {" + s3_file.key + "}")
                 transfer_file(sftp_client, s3_file, filename)
             except botocore.exceptions.BotoCoreError as ex:
@@ -107,10 +108,10 @@ def on_trigger_event(event, context):
                     "[S3-SFTP] Error transferring S3 file '{" + s3_file.key + "}'.")
                 contents = str(ex)
                 filename = filename + '.x'
-            logger.info("[S3-SFTP] Archiving S3 file '{" + s3_file.key + "}'.")
-            archive_file(bucket=bucket, filename=filename, contents=contents)
-            logger.info("[S3-SFTP] Deleting S3 file '{" + s3_file.key + "}'.")
-            delete_file(s3_file)
+            # logger.info("[S3-SFTP] Archiving S3 file '{" + s3_file.key + "}'.")
+            # archive_file(bucket=bucket, filename=filename, contents=contents)
+            # logger.info("[S3-SFTP] Deleting S3 file '{" + s3_file.key + "}'.")
+            # delete_file(s3_file)
 
 
 def connect_to_sftp(hostname, port, username, password, pkey):
@@ -164,12 +165,14 @@ def s3_files(event):
             logger.info(
                 "[S3-SFTP] Received { " + event_subcat + " } trigger on { " + key + " }")
             yield boto3.resource('s3').Object(bucket, key)
+            logger.info("[S3-SFTP] #168 ")
         else:
             logger.warning("[S3-SFTP] Ignoring invalid event: { " + record + " }")
 
 
 def sftp_filename(file_mask, s3_file):
     """Create destination SFTP filename."""
+    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
     return file_mask.format(
         bucket=s3_file.bucket_name,
         key=s3_file.key.replace("_000", ""),
