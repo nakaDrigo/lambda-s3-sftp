@@ -1,12 +1,11 @@
-FROM amazonlinux:1
-LABEL maintainer "YunoJuno <code@yunojuno.com>"
+FROM amazonlinux:latest
+LABEL maintainer "nakaDrigo <nakadrigo@gmail.com>"
 
-# Install python3.6
-RUN yum install -y python36
+# Install SO requirements
+RUN yum install -y zip make python-pip dos2unix
 
-# Install zip and pip-tools so we can manage requirements
-RUN yum install -y zip && \
-    python3 -m pip install pip-tools
+# Install Py requirements
+RUN python -m pip install pip-tools
 
 # required to make pip-compile work
 ENV LC_ALL=en_US.utf8

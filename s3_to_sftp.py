@@ -45,7 +45,7 @@ assert SSH_PASSWORD or SSH_PRIVATE_KEY, "Missing SSH_PASSWORD or SSH_PRIVATE_KEY
 SSH_PORT = int(os.getenv('SSH_PORT', 22))
 SSH_DIR = os.getenv('SSH_DIR')
 # filename mask used for the remote file
-SSH_FILENAME = os.getenv('SSH_FILENAME', 'data_{current_date}')
+#SSH_FILENAME = os.getenv('SSH_FILENAME', 'data_{current_date}')
 
 
 def on_trigger_event(event, context):
@@ -74,14 +74,13 @@ def on_trigger_event(event, context):
         context: a LambdaContext object - unused.
 
     """
+    # prefix all logging statements - otherwise impossible to filter out in Cloudwatch
+    logger.info("[S3-SFTP] received trigger event")
+
     if SSH_PRIVATE_KEY:
         key_obj = get_private_key(*SSH_PRIVATE_KEY.split(':'))
     else:
         key_obj = None
-
-    # prefix all logging statements - otherwise impossible to filter out in
-    # Cloudwatch
-    logger.info(f"S3-SFTP: received trigger event")
 
     sftp_client, transport = connect_to_sftp(
         hostname=SSH_HOST,
@@ -90,34 +89,40 @@ def on_trigger_event(event, context):
         password=SSH_PASSWORD,
         pkey=key_obj
     )
+
     if SSH_DIR:
         sftp_client.chdir(SSH_DIR)
-        logger.debug(f"S3-SFTP: Switched into remote SFTP upload directory")
+        logger.debug("[S3-SFTP] Switched into remote SFTP upload directory")
 
     with transport:
         for s3_file in s3_files(event):
-            filename = sftp_filename(SSH_FILENAME, s3_file)
-            bucket = s3_file.bucket_name
-            contents = ''
             try:
-                logger.info(f"S3-SFTP: Transferring S3 file '{s3_file.key}'")
+                filename = sftp_filename(s3_file.key, s3_file)
+                bucket = s3_file.bucket_name
+                contents = ''
+                logger.debug("[S3-SFTP] transport: filename{"+filename+"} bucket{"+bucket+"} contents{"+contents+"}")
+                logger.info("[S3-SFTP] Transferring S3 file {" + s3_file.key + "}")
                 transfer_file(sftp_client, s3_file, filename)
             except botocore.exceptions.BotoCoreError as ex:
-                logger.exception(f"S3-SFTP: Error transferring S3 file '{s3_file.key}'.")
+                logger.exception(
+                    "[S3-SFTP] Error transferring S3 file '{" + s3_file.key + "}'.")
                 contents = str(ex)
                 filename = filename + '.x'
-            logger.info(f"S3-SFTP: Archiving S3 file '{s3_file.key}'.")
-            archive_file(bucket=bucket, filename=filename, contents=contents)
-            logger.info(f"S3-SFTP: Deleting S3 file '{s3_file.key}'.")
-            delete_file(s3_file)
+            # logger.info("[S3-SFTP] Archiving S3 file '{" + s3_file.key + "}'.")
+            # archive_file(bucket=bucket, filename=filename, contents=contents)
+            # logger.info("[S3-SFTP] Deleting S3 file '{" + s3_file.key + "}'.")
+            # delete_file(s3_file)
 
 
 def connect_to_sftp(hostname, port, username, password, pkey):
-    """Connect to SFTP server and return client object."""
+    """
+    Connect to SFTP server and return client object.
+    """
+    logger.debug("[S3-SFTP] Connecting to remote SFTP server...")
     transport = paramiko.Transport((hostname, port))
     transport.connect(username=username, password=password, pkey=pkey)
     client = paramiko.SFTPClient.from_transport(transport)
-    logger.debug(f"S3-SFTP: Connected to remote SFTP server")
+    logger.debug("[S3-SFTP] Connected to remote SFTP server")
     return client, transport
 
 
@@ -131,7 +136,7 @@ def get_private_key(bucket, key):
     key_obj = boto3.resource('s3').Object(bucket, key)
     key_str = key_obj.get()['Body'].read().decode('utf-8')
     key = paramiko.RSAKey.from_private_key(io.StringIO(key_str))
-    logger.debug(f"S3-SFTP: Retrieved private key from S3")
+    logger.debug("[S3-SFTP] Retrieved private key from S3")
     return key
 
 
@@ -157,14 +162,17 @@ def s3_files(event):
         key = record['s3']['object']['key']
         event_category, event_subcat = record['eventName'].split(':')
         if event_category == 'ObjectCreated':
-            logger.info(f"S3-SFTP: Received '{ event_subcat }' trigger on '{ key }'")
+            logger.info(
+                "[S3-SFTP] Received { " + event_subcat + " } trigger on { " + key + " }")
             yield boto3.resource('s3').Object(bucket, key)
+            logger.info("[S3-SFTP] #168 ")
         else:
-            logger.warning(f"S3-SFTP: Ignoring invalid event: { record }")
+            logger.warning("[S3-SFTP] Ignoring invalid event: { " + record + " }")
 
 
 def sftp_filename(file_mask, s3_file):
     """Create destination SFTP filename."""
+    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
     return file_mask.format(
         bucket=s3_file.bucket_name,
         key=s3_file.key.replace("_000", ""),
@@ -187,7 +195,8 @@ def transfer_file(sftp_client, s3_file, filename):
     """
     with sftp_client.file(filename, 'w') as sftp_file:
         s3_file.download_fileobj(Fileobj=sftp_file)
-    logger.info(f"S3-SFTP: Transferred '{ s3_file.key }' from S3 to SFTP as '{ filename }'")
+    logger.info(
+        "[S3-SFTP] Transferred { " + s3_file.key + " } from S3 to SFTP as { " + filename + " }")
 
 
 def delete_file(s3_file):
@@ -205,12 +214,12 @@ def delete_file(s3_file):
     try:
         s3_file.delete()
     except botocore.exceptions.BotoCoreError as ex:
-        logger.exception(f"S3-SFTP: Error deleting '{ s3_file.key }' from S3.")
+        logger.exception("[S3-SFTP] Error deleting { " + s3_file.key + " } from S3.")
     else:
-        logger.info(f"S3-SFTP: Deleted '{ s3_file.key }' from S3")
+        logger.info("[S3-SFTP] Deleted { " + s3_file.key + " } from S3")
 
 
-def archive_file(*, bucket, filename, contents):
+def archive_file(bucket, filename, contents):
     """
     Write to S3 an archive file.
 
@@ -230,6 +239,7 @@ def archive_file(*, bucket, filename, contents):
     try:
         boto3.resource('s3').Object(bucket, key).put(Body=contents)
     except botocore.exceptions.BotoCoreError as ex:
-        logger.exception(f"S3-SFTP: Error archiving '{ filename }' as '{ key }'.")
+        logger.exception(
+            "[S3-SFTP] Error archiving { " + filename + " } as { " + key + " }.")
     else:
-        logger.info(f"S3-SFTP: Archived '{ filename }' as '{ key }'.")
+        logger.info("[S3-SFTP] Archived { " + filename + " } as { " + key + " }.")
