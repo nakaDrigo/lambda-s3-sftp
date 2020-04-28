@@ -97,7 +97,8 @@ def on_trigger_event(event, context):
     with transport:
         for s3_file in s3_files(event):
             try:
-                filename = sftp_filename(s3_file.key, s3_file)
+                # filename = sftp_filename(s3_file.key, s3_file)
+                filename = s3_file.key.split('/')[-1]
                 bucket = s3_file.bucket_name
                 contents = ''
                 logger.debug("[S3-SFTP] transport: filename{"+filename+"} bucket{"+bucket+"} contents{"+contents+"}")
