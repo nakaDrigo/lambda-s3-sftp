@@ -173,9 +173,11 @@ def s3_files(event):
 def sftp_filename(file_mask, s3_file):
     """Create destination SFTP filename."""
     logger.debug("[S3-SFTP] Executando: { sftp_filename }")
+    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
+    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
     return file_mask.format(
         bucket=s3_file.bucket_name,
-        key=s3_file.key.replace("_000", ""),
+        key=s3_file.key.split('/')[-1],
         current_date=datetime.date.today().isoformat()
     )
 
