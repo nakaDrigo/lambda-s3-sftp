@@ -47,6 +47,7 @@ SSH_DIR = os.getenv('SSH_DIR')
 # filename mask used for the remote file
 #SSH_FILENAME = os.getenv('SSH_FILENAME', 'data_{current_date}')
 
+MAX_REQUEST_SIZE = int(os.getenv('SSH_PORT'))
 
 def on_trigger_event(event, context):
     """
@@ -92,21 +93,19 @@ def on_trigger_event(event, context):
 
     if SSH_DIR:
         sftp_client.chdir(SSH_DIR)
-        logger.debug("[S3-SFTP] Switched into remote SFTP upload directory")
+        logger.debug("[S3-SFTP] Switched into remote SFTP upload directory '{}'".format(SSH_DIR))
 
     with transport:
         for s3_file in s3_files(event):
+            filename = s3_file.key.split('/')[-1]
+            bucket = s3_file.bucket_name
+            contents = ''
             try:
-                # filename = sftp_filename(s3_file.key, s3_file)
-                filename = s3_file.key.split('/')[-1]
-                bucket = s3_file.bucket_name
-                contents = ''
-                logger.debug("[S3-SFTP] transport: filename{"+filename+"} bucket{"+bucket+"} contents{"+contents+"}")
-                logger.info("[S3-SFTP] Transferring S3 file {" + s3_file.key + "}")
+                logger.info("[S3-SFTP] Transferring S3 file '{}'".format(s3_file.key))
                 transfer_file(sftp_client, s3_file, filename)
             except botocore.exceptions.BotoCoreError as ex:
                 logger.exception(
-                    "[S3-SFTP] Error transferring S3 file '{" + s3_file.key + "}'.")
+                    "[S3-SFTP] Error transferring S3 file '{}'.".format(s3_file.key))
                 contents = str(ex)
                 filename = filename + '.x'
             # logger.info("[S3-SFTP] Archiving S3 file '{" + s3_file.key + "}'.")
@@ -120,6 +119,8 @@ def connect_to_sftp(hostname, port, username, password, pkey):
     Connect to SFTP server and return client object.
     """
     logger.debug("[S3-SFTP] Connecting to remote SFTP server...")
+    if MAX_REQUEST_SIZE:
+        paramiko.sftp_file.SFTPFile.MAX_REQUEST_SIZE = MAX_REQUEST_SIZE
     transport = paramiko.Transport((hostname, port))
     transport.connect(username=username, password=password, pkey=pkey)
     client = paramiko.SFTPClient.from_transport(transport)
@@ -164,23 +165,10 @@ def s3_files(event):
         event_category, event_subcat = record['eventName'].split(':')
         if event_category == 'ObjectCreated':
             logger.info(
-                "[S3-SFTP] Received { " + event_subcat + " } trigger on { " + key + " }")
+                "[S3-SFTP] Received [{}] trigger on [{}]".format(event_subcat, key))
             yield boto3.resource('s3').Object(bucket, key)
-            logger.info("[S3-SFTP] #168 ")
         else:
-            logger.warning("[S3-SFTP] Ignoring invalid event: { " + record + " }")
-
-
-def sftp_filename(file_mask, s3_file):
-    """Create destination SFTP filename."""
-    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
-    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
-    logger.debug("[S3-SFTP] Executando: { sftp_filename }")
-    return file_mask.format(
-        bucket=s3_file.bucket_name,
-        key=s3_file.key.split('/')[-1],
-        current_date=datetime.date.today().isoformat()
-    )
+            logger.warning("[S3-SFTP] Ignoring invalid event: [{}]".format(record))
 
 
 def transfer_file(sftp_client, s3_file, filename):
@@ -196,10 +184,10 @@ def transfer_file(sftp_client, s3_file, filename):
         and any status message to be written to the archive file.
 
     """
-    with sftp_client.file(filename, 'w') as sftp_file:
+    with sftp_client.file(filename, 'w', 0) as sftp_file:
         s3_file.download_fileobj(Fileobj=sftp_file)
     logger.info(
-        "[S3-SFTP] Transferred { " + s3_file.key + " } from S3 to SFTP as { " + filename + " }")
+        "[S3-SFTP] Transferred '{}' from S3 to SFTP as '{}'".format(s3_file.key, filename))
 
 
 def delete_file(s3_file):

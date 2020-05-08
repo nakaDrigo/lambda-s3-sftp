@@ -5,3 +5,11 @@
 Dockerfile
 package
 README.md
+.idea/
+.vscode/
+docs/
+screenshots/
+venv/
+.gitignore
+LICENSE
+tests.py
